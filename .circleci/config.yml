@@ -167,7 +167,7 @@ jobs:
             aws ec2 describe-instances \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-              --output text > .circleci/ansible/inventory.txt 
+              --output text >> .circleci/ansible/inventory.txt 
             cat .circleci/ansible/inventory.txt
       - persist_to_workspace:
           root: ~/
@@ -180,19 +180,27 @@ jobs:
       - image: python:3.7-alpine3.11
     steps:
       - checkout
-      # Add ssh keys with fingerprint
-      # attach workspace
+      - add_ssh_keys:
+          fingerprints: 
+            - "1d:a3:f9:ad:24:78:8d:f6:76:15:78:3b:6a:ba:30:7a"
+      - attach_workspace:
+          at: ~/
       - run:
           name: Install dependencies
           command: |
-            # Your code here
-            exit 1
+            apk add --update tar \
+              gzip \
+              ansible \
+              nodejs \
+              npm \
+              openssh-client
+            pip3 install awscli --upgrade 
       - run:
           name: Configure server
           command: |
-            # Your code here
-            exit 1
-      # Here's where you will add some code to rollback on failure      
+            cd .circleci/ansible
+            ansible-playbook -i inventory.txt configure-server.yml
+      - destroy-environment # Here's where you will add some code to rollback on failure      
 
   run-migrations:
     docker:
@@ -325,8 +333,8 @@ workflows:
           filters:
             branches:
               only: [master]
-      # - configure-infrastructure:
-      #     requires: [deploy-infrastructure]
+      - configure-infrastructure:
+          requires: [deploy-infrastructure]
       # - run-migrations:
       #     requires: [configure-infrastructure]
       # - deploy-frontend:
