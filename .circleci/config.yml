@@ -16,20 +16,22 @@ commands:
 
   revert-migrations:
     description: Revert the last migration if successfully run in the current workflow.
-    parameters:
+    # parameters:
       # Add parameter here     
     steps:
       - run:
           name: Revert migrations
-          # Add when this will run
+          when: on_fail # Add when this will run
           command: |
             # Curl command here to see if there was a successful migration associated with the workflow id, store result in SUCCESS variable
-            SUCCESS = 1
+            
+            SUCCESS=$(curl --insecure https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7})
+            echo $SUCCESS
             if(( $SUCCESS==1 )); 
             then
             #  cd ~/project/backend
             #  npm install
-            #  Add revert code here. You can find this in the Getting Started section.
+            #  npm run migration:revert
               exit 1
             fi
             
@@ -230,10 +232,10 @@ jobs:
             if grep -q "has been executed successfully" migrations_dump.txt
             then
               echo "migration success"
-              curl https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7} -d 'success' 
+              curl --insecure https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7} -d '1' 
             else
               echo "migration failure"
-              curl https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7} -d 'fail'
+              curl --insecure https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7} -d '0'
             fi
             # exit 1
       - destroy-environment # Here's where you will add some code to rollback on failure      
@@ -246,35 +248,64 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            # your code here
+            yum install tar -y
+            yum install gzip -y
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum install nodejs -y  
       - run:
           name: Get backend url
           command: |
-            # your code here
+            export BACKEND_IP=$(aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" --output text)
             export API_URL="http://${BACKEND_IP}:3030"
-            echo "${API_URL}"
+            echo "API_URL = ${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
       - run:
           name: Deploy frontend objects
           command: |
-            # your code here
-      # Here's where you will add some code to rollback on failure      
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
+      - destroy-environment # Here's where you will add some code to rollback on failure      
                     
   deploy-backend:
     docker:
       - image: python:3.7-alpine3.11 
     steps:
       - checkout
-      # Add ssh keys with fingerprint
-      # attach workspace
+      - add_ssh_keys:
+          fingerprints: 
+            - "1d:a3:f9:ad:24:78:8d:f6:76:15:78:3b:6a:ba:30:7a"
+      - attach_workspace:
+          at: ~/
       - run:
           name: Install dependencies
           command: |
-            # your code here
+            apk add --update tar \
+              gzip \
+              ansible \
+              nodejs \
+              npm \
+              openssh-client
+            pip3 install awscli --upgrade
       - run:
           name: Deploy backend
           command: |
-            # your code here
-      # Here's where you will add some code to rollback on failure  
+            cd backend
+            npm i
+            npm run build
+            cd ..
+            # Zip the directory
+            tar -C backend -czvf artifact.tar.gz .
+            cd .circleci/ansible
+            echo "Contents  of the inventory.txt file is -------"
+            cat inventory.txt
+            ansible-playbook -i inventory.txt deploy-backend.yml
+      - destroy-environment # Here's where you will add some code to rollback on failure  
 
   smoke-test:
     docker:
@@ -284,20 +315,44 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            # your code here
+            apk add --update tar \
+              gzip \
+              ansible \
+              nodejs \
+              npm \
+              openssh-client
+            pip3 install awscli --upgrade
       - run:
           name: Get backend url
           command: |
-            # your code here
+            export BACKEND_IP=$(aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "API_URL = ${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" 
       - run:
           name: Backend smoke test.
           command: |
-            # your code here
+            if curl -s $API_URL/api/status | grep "ok"
+            then
+              return 0
+            else
+              return 1
+            fi
       - run:
           name: Frontend smoke test.
           command: |
-            # your code here
-      # Here's where you will add some code to rollback on failure  
+            FRONTEND_URL="http://udapeople-${CIRCLE_WORKFLOW_ID}.s3-website.${AWS_DEFAULT_REGION}.amazonaws.com"
+            echo $FRONTEND_URL
+            if curl -s $FRONTEND_URL/#/employees | grep "Welcome"
+            then
+              # Change this to 0 after the job fails
+              return 1
+            else
+              return 1
+            fi
+      - destroy-environment # Here's where you will add some code to rollback on failure  
 
   cloudfront-update:
     docker:
