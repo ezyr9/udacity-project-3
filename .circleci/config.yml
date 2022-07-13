@@ -31,10 +31,9 @@ commands:
             echo $SUCCESS
             if(( $SUCCESS==1 )); 
             then
-            #  cd ~/project/backend
-            #  npm install
-            #  npm run migration:revert
-              exit 1
+              cd ~/project/backend
+              npm install
+              npm run migration:revert
             fi
             
 jobs:
@@ -310,7 +309,7 @@ jobs:
             cat inventory.txt
             export ANSIBLE_HOST_KEY_CHECKING=False
             ansible-playbook -i inventory.txt deploy-backend.yml
-      # - destroy-environment # Here's where you will add some code to rollback on failure  
+      - destroy-environment # Here's where you will add some code to rollback on failure  
 
   smoke-test:
     docker:
@@ -356,7 +355,8 @@ jobs:
             else
               return 1
             fi
-      # - destroy-environment # Here's where you will add some code to rollback on failure  
+      - destroy-environment
+      - revert-migrations # Here's where you will add some code to rollback on failure  
 
   cloudfront-update:
     docker:
