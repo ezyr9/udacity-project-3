@@ -4,10 +4,9 @@
   copy:
     src: ~/project/artifact.tar.gz
     dest: ~/artifact.tar.gz
-
 - name: extract the zipped artifact into the EC2 instance
   become: true
-  command: tar -xvf artifact.tar.gz
+  command: tar -xvf ~/artifact.tar.gz
 - name: npm install
   become: true
   command: npm install
