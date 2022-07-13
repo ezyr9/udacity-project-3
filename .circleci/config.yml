@@ -386,7 +386,6 @@ jobs:
             echo "current---${CIRCLE_WORKFLOW_ID:0:7}"
       - destroy-environment
       - revert-migrations # Here's where you will add some code to rollback on failure  
-
 cleanup:
     docker:
       - image: amazon/aws-cli
@@ -414,8 +413,6 @@ cleanup:
             else
               echo '---------------  cannot cleanup -------------------'  
             fi
-            
-
 workflows:
   default:
     jobs:
