@@ -214,6 +214,7 @@ jobs:
             cd backend
             npm install
             # Run and save the migration output
+            echo "starting migration"
             npm run migrations > migrations_dump.txt
       - run:
           name: Send migration results to memstash
@@ -227,7 +228,7 @@ jobs:
               curl https://kvdb.io/NqJ9WRq7WFXtV2q4E5NsZi/migration_${CIRCLE_WORKFLOW_ID:0:7} -d 'fail'
             fi
             # exit 1
-     # Here's where you will add some code to rollback on failure      
+      - destroy-environment # Here's where you will add some code to rollback on failure      
 
   deploy-frontend:
     docker:
